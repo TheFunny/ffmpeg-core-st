@@ -1,0 +1,13 @@
+{
+  "name": "ffmpeg-core-st-smoke",
+  "private": true,
+  "type": "module",
+  "description": "Loads out/ffmpeg-core-st.{js,wasm} through the same wrapper the web app ships (@ffmpeg/ffmpeg 0.12.x UMD) and asserts the two defects the self-built core exists to fix.",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "devDependencies": {
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "playwright": "1.63.0"
+  }
+}

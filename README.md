@@ -1,35 +1,64 @@
----
-<p align="center">
-  <a href="#">
-    <img alt="ffmpeg.wasm" width="128px" height="128px" src="https://github.com/ffmpegwasm/ffmpeg.wasm/blob/main/apps/website/static/img/logo192.png"></img>
-  </a>
-</p>
+# ffmpeg-core-st
 
-# ffmpeg.wasm
+Fork of [ffmpegwasm/ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm) that builds the
+single-threaded WASM core shipped by [StickerProcess](https://github.com/TheFunny/StickerProcess).
 
-ffmpeg.wasm is a pure Webassembly / Javascript port of FFmpeg. It enables video & audio record, convert and stream right inside browsers.
+Everything is on the branch **`st-core`** (= upstream `f876f907c7e9b9bf51d4ed0b913a855a63ae63fc`,
+the source of `@ffmpeg/core@0.12.10`, plus the changes below). `main` is untouched upstream.
 
-[![stability-experimental](https://img.shields.io/badge/stability-experimental-orange.svg)](https://github.com/emersion/stability-badges#experimental)
-[![Node Version](https://img.shields.io/node/v/@ffmpeg/ffmpeg.svg)](https://img.shields.io/node/v/@ffmpeg/ffmpeg.svg)
-[![Actions Status](https://github.com/ffmpegwasm/ffmpeg.wasm/workflows/CI/badge.svg)](https://github.com/ffmpegwasm/ffmpeg.wasm/actions)
-![npm (tag)](https://img.shields.io/npm/v/@ffmpeg/ffmpeg/latest)
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/ffmpegwasm/ffmpeg.wasm/graphs/commit-activity)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Downloads Total](https://img.shields.io/npm/dt/@ffmpeg/ffmpeg.svg)](https://www.npmjs.com/package/@ffmpeg/ffmpeg)
-[![Downloads Month](https://img.shields.io/npm/dm/@ffmpeg/ffmpeg.svg)](https://www.npmjs.com/package/@ffmpeg/ffmpeg)
-[![Netlify Status](https://api.netlify.com/api/v1/badges/1943b6d3-45ad-4b46-bfba-cb8d5716604c/deploy-status)](https://app.netlify.com/sites/ffmpegwasm/deploys)
+## What this fork changes
 
-Join us on Discord!
+| Change | Why |
+|---|---|
+| `build/libvpx.sh`: `--enable-vp9-highbitdepth` | The prebuilt core falls back to 8-bit VP9 for `-pix_fmt yuv420p10`; StickerProcess relies on real 10-bit for its MP4 path. |
+| `.github/workflows/build-core.yml` | Builds and publishes the core from CI instead of a local Docker/WSL session. |
+| `test/smoke/` | Headless-Chromium check that the built core actually encodes 10-bit VP9 and still handles GIF alpha. |
 
-[![Discord](https://dcbadge.vercel.app/api/server/NjGMaqqfm5)](https://discord.gg/NjGMaqqfm5)
+That is the whole diff — the Dockerfile, the 16 library build scripts and the
+ffmpeg/ffmpeg-wasm stages are upstream's.
 
-## Documentation
+## Releases
 
-- [Introduction](https://ffmpegwasm.netlify.app/docs/overview)
-- [Getting
-    Started](https://ffmpegwasm.netlify.app/docs/getting-started/installation)
-- [API](https://ffmpegwasm.netlify.app/docs/api/ffmpeg/)
-- [FAQ](https://ffmpegwasm.netlify.app/docs/faq)
-- [Contribution](https://ffmpegwasm.netlify.app/docs/contribution/core)
+`.github/workflows/build-core.yml` (Actions → *Build ST core* → *Run workflow*, with a tag such as
+`st-core-v1`) publishes a release containing:
 
-Please sponsor ffmpeg.wasm to make it sustainable. :heart:
+- `ffmpeg-core-st.js` — the UMD loader (`dist/umd/ffmpeg-core.js`)
+- `ffmpeg-core-st.wasm` — the loader's wasm, after `wasm-opt -Oz --strip-debug`
+- `SHA256SUMS.txt` — hashes; consumers pin these
+
+The same two files plus `SHA256SUMS.txt` are also kept as workflow artifacts for debugging;
+the unoptimized `dist/` build is not published.
+
+Build knobs (pinned in the workflow): `emscripten/emsdk:3.1.40`, binaryen `version_132`,
+`FFMPEG_ST=yes`, `EXTRA_CFLAGS="-O3 -msimd128"`, FFmpeg `n5.1.4`.
+
+A cold build takes tens of minutes on the 4-vCPU runner; the buildx layer cache
+(`actions/cache`, keyed on `Dockerfile`/`Makefile`/`build/*`) makes later builds skip the
+unchanged library stages.
+
+## Consuming it
+
+```bash
+tag=st-core-v1
+curl -fsSLO "https://github.com/TheFunny/ffmpeg-core-st/releases/download/$tag/ffmpeg-core-st.js"
+curl -fsSLO "https://github.com/TheFunny/ffmpeg-core-st/releases/download/$tag/ffmpeg-core-st.wasm"
+curl -fsSLO "https://github.com/TheFunny/ffmpeg-core-st/releases/download/$tag/SHA256SUMS.txt"
+sha256sum -c SHA256SUMS.txt
+```
+
+StickerProcess does exactly this in `scripts/fetch-ffmpeg-core.sh`, with the tag and hashes
+pinned in that script — update them when you publish a new core.
+
+## Local smoke test
+
+```bash
+cd test/smoke && npm install && npx playwright install --with-deps chromium && node run.mjs
+```
+
+Requires a build in `out/` (`ffmpeg-core-st.js` + `ffmpeg-core-st.wasm`) and `ffprobe` on `PATH`.
+
+## License
+
+Upstream is MIT. The core binaries are GPL v3: FFmpeg is configured with `--enable-gpl` and
+links x264/x265. The exact source for a published binary is this repository at the commit
+named in that release's notes, plus the upstream project.

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ffmpeg-core-st smoke</title>
+</head>
+<body>
+<!-- Classic scripts on purpose: this mirrors the web app, which injects the UMD
+     wrapper (ffmpeg.js) and keeps its classic worker chunk (814.ffmpeg.js) next
+     to the core files. -->
+<script src="./ffmpeg.js"></script>
+<script>
+const toBase64 = (bytes) => {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+};
+
+// Load path copied from StickerProcess' assets/ffmpeg-engine.js: core loader and
+// wasm as blob URLs, then FFmpeg#load on a single instance reused across jobs.
+const load = async () => {
+  const { FFmpeg } = FFmpegWASM;
+  const blobURL = async (url, mime) =>
+    URL.createObjectURL(new Blob([await (await fetch(url)).arrayBuffer()], { type: mime }));
+  const ff = new FFmpeg();
+  await ff.load({
+    coreURL: await blobURL("./ffmpeg-core-st.js", "text/javascript"),
+    wasmURL: await blobURL("./ffmpeg-core-st.wasm", "application/wasm"),
+  });
+  return ff;
+};
+
+const transcode = async (ff, input, output, args) => {
+  const res = await fetch(`./fixtures/${input}`);
+  await ff.writeFile(input, new Uint8Array(await res.arrayBuffer()));
+  const code = await ff.exec(["-i", input, ...args, "-y", output]);
+  const bytes = new Uint8Array(await ff.readFile(output));
+  return { code, size: bytes.length, b64: toBase64(bytes) };
+};
+
+window.__smoke = (async () => {
+  const ff = await load();
+  const out = {};
+  try {
+    // 1. H.264 → VP9: the prebuilt @ffmpeg/core fell back to 8-bit here, and the
+    //    same encode used to crash the core with an out-of-bounds read.
+    out.mp4 = await transcode(ff, "in.mp4", "in10.webm",
+      ["-c:v", "libvpx-vp9", "-pix_fmt", "yuv420p10le", "-b:v", "300k",
+       "-deadline", "realtime", "-cpu-used", "4", "-an"]);
+  } catch (e) {
+    out.mp4 = { error: String(e) };
+  }
+  try {
+    // 2. GIF → alpha webm, on the same instance: a crash in (1) used to wedge
+    //    every later exec.
+    out.gif = await transcode(ff, "in.gif", "in.gif.webm",
+      ["-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "300k",
+       "-deadline", "realtime", "-cpu-used", "4", "-an"]);
+  } catch (e) {
+    out.gif = { error: String(e) };
+  }
+  out.agent = navigator.userAgent;
+  return out;
+})();
+</script>
+</body>
+</html>

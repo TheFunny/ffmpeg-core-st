@@ -5,6 +5,7 @@ set -euo pipefail
 CONF_FLAGS=(
   --prefix=$INSTALL_DIR                              # install library in a build directory for FFmpeg to include
   --target=generic-gnu                               # target with miminal features
+  --enable-vp9-highbitdepth                          # 10-bit VP9 profiles (yuv420p10le) — this fork's only change
   --disable-install-bins                             # not to install bins
   --disable-examples                                 # not to build examples
   --disable-tools                                    # not to build tools
