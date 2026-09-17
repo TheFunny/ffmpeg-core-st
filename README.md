@@ -12,7 +12,7 @@ the source of `@ffmpeg/core@0.12.10`, plus the changes below). `main` is untouch
 |---|---|
 | `build/libvpx.sh`: `--enable-vp9-highbitdepth` | The prebuilt core falls back to 8-bit VP9 for `-pix_fmt yuv420p10`; StickerProcess relies on real 10-bit for its MP4 path. |
 | `.github/workflows/build-core.yml` | Builds and publishes the core from CI instead of a local Docker/WSL session. |
-| `test/smoke/` | Headless-Chromium check that the built core actually encodes 10-bit VP9 (and that a GIF encode afterwards still works). |
+| `test/smoke/` | Headless-Chromium check that the built core actually encodes 10-bit VP9 and keeps GIF alpha (and that a second exec on the same instance still works). |
 
 That is the whole diff — the Dockerfile, the 16 library build scripts and the
 ffmpeg/ffmpeg-wasm stages are upstream's.
