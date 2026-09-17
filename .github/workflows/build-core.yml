@@ -122,6 +122,15 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           node run.mjs
 
+      # The produced webm files and ffmpeg logs are what you need when the smoke
+      # test trips; smoke-out/ only exists if the browser run got that far.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-out
+          path: smoke-out
+          if-no-files-found: ignore
+
       - name: Record hashes
         run: |
           cd out
@@ -149,7 +158,7 @@ jobs:
             "- emsdk: ${EMSDK_IMAGE}, binaryen: ${BINARYEN}" \
             "- build: FFMPEG_ST=yes, EXTRA_CFLAGS=\"-O3 -msimd128\", wasm-opt -Oz" \
             "- libvpx: --enable-vp9-highbitdepth (this fork's only source change)" \
-            "- smoke tested in headless Chromium (GIF alpha + 10-bit VP9)" \
+            "- smoke tested in headless Chromium (real 10-bit VP9 + a GIF encode on the same instance); GIF alpha is not marked in WebM by FFmpeg n5.1.4" \
             "" \
             "\`\`\`" \
             "$(cat SHA256SUMS.txt)" \

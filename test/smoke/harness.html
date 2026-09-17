@@ -25,6 +25,8 @@ const load = async () => {
   const blobURL = async (url, mime) =>
     URL.createObjectURL(new Blob([await (await fetch(url)).arrayBuffer()], { type: mime }));
   const ff = new FFmpeg();
+  window.__logs = [];
+  ff.on("log", ({ message }) => window.__logs.push(message));
   await ff.load({
     coreURL: await blobURL("./ffmpeg-core-st.js", "text/javascript"),
     wasmURL: await blobURL("./ffmpeg-core-st.wasm", "application/wasm"),
@@ -32,12 +34,15 @@ const load = async () => {
   return ff;
 };
 
+// ffmpeg's own diagnostics matter more than the process exit code when an
+// assertion trips (e.g. "Incompatible pixel format ... auto-selecting").
 const transcode = async (ff, input, output, args) => {
   const res = await fetch(`./fixtures/${input}`);
   await ff.writeFile(input, new Uint8Array(await res.arrayBuffer()));
+  const before = window.__logs.length;
   const code = await ff.exec(["-i", input, ...args, "-y", output]);
   const bytes = new Uint8Array(await ff.readFile(output));
-  return { code, size: bytes.length, b64: toBase64(bytes) };
+  return { code, size: bytes.length, b64: toBase64(bytes), logs: window.__logs.slice(before) };
 };
 
 window.__smoke = (async () => {
