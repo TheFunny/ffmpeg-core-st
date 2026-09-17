@@ -166,7 +166,12 @@ jobs:
             "" \
             "FFmpeg is GPL v3 (built with --enable-gpl, x264/x265):" \
             "source for this binary is this repository plus the upstream commit above.")
-          gh release view "$TAG" >/dev/null 2>&1 \
-            && gh release upload "$TAG" out/ffmpeg-core-st.js out/ffmpeg-core-st.wasm SHA256SUMS.txt --clobber \
-            || gh release create "$TAG" out/ffmpeg-core-st.js out/ffmpeg-core-st.wasm SHA256SUMS.txt \
-                 --title "ffmpeg.wasm ST core $TAG" --notes "$NOTES"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/ffmpeg-core-st.js out/ffmpeg-core-st.wasm SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" --title "ffmpeg.wasm ST core $TAG" --notes "$NOTES" \
+              out/ffmpeg-core-st.js out/ffmpeg-core-st.wasm SHA256SUMS.txt
+          fi
+          # Always refresh the notes: `gh release upload --clobber` leaves the
+          # original body in place, which silently goes stale on a re-publish.
+          gh release edit "$TAG" --notes "$NOTES"
