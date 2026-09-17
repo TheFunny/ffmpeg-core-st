@@ -68,13 +68,16 @@ jobs:
 
       - name: Build core
         run: |
+          # `-o .`: the final Dockerfile stage is `FROM scratch AS exportor`
+          # copying /src/dist, so the exported tree is ./dist/umd/... (this is
+          # what upstream's Makefile does with `-o ./packages/core`).
           docker buildx build \
             --build-arg FFMPEG_ST=yes \
             --build-arg EXTRA_CFLAGS="-O3 -msimd128" \
             --cache-from=type=local,src=build-cache \
             --cache-to=type=local,dest=build-cache,mode=max \
-            -o dist .
-          test -s dist/umd/ffmpeg-core.wasm
+            -o . .
+          test -s dist/umd/ffmpeg-core.wasm || { ls -R dist | head -50; exit 1; }
           ls -l dist/umd
 
       - name: Shrink the wasm with wasm-opt -Oz
