@@ -8,3 +8,8 @@ dist
 
 # Local Netlify folder
 .netlify
+
+# build outputs of the ST core workflow (see .github/workflows/build-core.yml)
+out/
+build-cache/
+smoke-out/

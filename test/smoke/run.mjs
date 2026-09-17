@@ -7,9 +7,10 @@
 //   1. MP4 → VP9 keeps 10 bit (the prebuilt @ffmpeg/core silently falls back to
 //      yuv420p) and does not crash the core (it used to read out of bounds and
 //      wedge the instance).
-//   2. GIF → yuva420p still works, on the same instance, after that MP4 encode.
+//   2. GIF → alpha still encodes (the alpha_mode tag, not the base pix_fmt) on
+//      the same instance, after that MP4 encode.
 //
-// Exit code 0 = both webm outputs carry the expected pixel format.
+// Exit code 0 = both webm outputs carry the expected stream properties.
 
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
@@ -59,12 +60,18 @@ async function serve() {
   return { server, port: server.address().port };
 }
 
-async function pixFmt(file) {
+async function probe(file) {
   const { stdout } = await run("ffprobe", [
     "-v", "error", "-select_streams", "v:0",
-    "-show_entries", "stream=pix_fmt", "-of", "default=nw=1:nk=1", file,
+    "-show_entries", "stream=pix_fmt:stream_tags=alpha_mode",
+    "-of", "default=nw=1", file,
   ]);
-  return stdout.trim();
+  const fields = {};
+  for (const line of stdout.trim().split("\n")) {
+    const eq = line.indexOf("=");
+    if (eq > 0) fields[line.slice(0, eq)] = line.slice(eq + 1);
+  }
+  return fields;
 }
 
 async function main() {
@@ -92,9 +99,11 @@ async function main() {
     const result = await page.evaluate(() => window.__smoke);
     console.log(`browser: ${result.agent}`);
 
+    // VP9 alpha in WebM lives in a side channel: the base stream still reports
+    // yuv420p, the marker is the alpha_mode tag.
     for (const [key, file, expect] of [
-      ["mp4", "mp4-10bit.webm", "yuv420p10le"],
-      ["gif", "gif-alpha.webm", "yuva420p"],
+      ["mp4", "mp4-10bit.webm", { pix_fmt: "yuv420p10le" }],
+      ["gif", "gif-alpha.webm", { alpha_mode: "1" }],
     ]) {
       const res = result[key];
       assert.ok(!res.error, `${key}: ${res.error}`);
@@ -102,9 +111,12 @@ async function main() {
       assert.ok(res.size > 1000, `${key}: output is only ${res.size} bytes`);
       const target = path.join(artifacts, file);
       await writeFile(target, Buffer.from(res.b64, "base64"));
-      const fmt = await pixFmt(target);
-      assert.equal(fmt, expect, `${key}: expected ${expect}, ffprobe reports ${fmt}`);
-      console.log(`ok  ${key}: ${res.size} bytes, ${fmt}`);
+      const fields = await probe(target);
+      for (const [field, want] of Object.entries(expect)) {
+        assert.equal(fields[field], want,
+          `${key}: expected ${field}=${want}, ffprobe reports ${fields[field] ?? "(none)"}`);
+      }
+      console.log(`ok  ${key}: ${res.size} bytes, ${JSON.stringify(fields)}`);
     }
   } finally {
     await browser.close();
